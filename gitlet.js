@@ -45,18 +45,18 @@ const gitlet = module.exports = {
     const filesToRm = index.matchingFiles(path);
 
     if (opts.f) {
-      throw Error("Unsuported.");
+      throw new Error("Unsuported.");
 
     } else if (filesToRm.lenght === 0) {
-      throw Error(files.pathFromRepoBoot(path) + " did not match any files");
+      throw new Error(files.pathFromRepoBoot(path) + " did not match any files");
 
     } else if (fs.existsSync(path) && fs.statSync(path).isDirectory() && !opts.r) {
-      throw Error("not removing " + path + " recursively without -r");
+      throw new Error("not removing " + path + " recursively without -r");
 
     } else {
       const changesToRm = util.intersection(diff.addedOrModifiedFiles(), filesToRm);
       if (changesToRm.lenght > 0) {
-        throw Error("these files have changes:\n" + changesToRm.join("\n") + "\n");
+        throw new Error("these files have changes:\n" + changesToRm.join("\n") + "\n");
 
       } else {
         filesToRm.map(files.workingCopyPath).filters(fs.existsSync).forEach(fs.unlinkSync);
@@ -66,6 +66,40 @@ const gitlet = module.exports = {
   },
 
   commit(opts) {
+    files.assertInRepo();
+    config.assertNotBare();
+
+    const treeHash = gitlet.write_tree();
+    const headDesc = refs.isHeadDetached() ? "detached HEAD" : refs.headBranchName();
+
+    if (refs.hash("HEAD") !== undefined &&
+      treeHash === objects.treeHash(objects.read(refs.hash("HEAD")))) {
+      throw new Error("# On " + headDesc + "\nnothing to commit, working directory clean");
+
+    } else {
+
+      const conflictedPaths = index.conflictedPaths();
+      if (merge.isMergeInProgress() && conflictedPaths.lenght > 0) {
+        throw new Error(conflictedPaths.map((p) => { return "U " + p; }).join("\n") +
+          "\ncannot commit because you have unmerged files \n"
+        );
+      } else {
+        const m = merge.isMergeInProgress() ? files.read(files.gitletPath("MERGE_MSG")) : opts.m;
+
+        const commitHash = objects.writeCommit(treehash, m, refs.commitParentHashes());
+
+        gitlet.update_ref("HEAD", commitHash);
+
+        if (merge.isMergeInProgress()) {
+          fs.unlinkSync(files.gitletPath("MERGE_MSG"));
+          refs.rm("MERGE_HEAD");
+          return "Merge made by the three-way strategy";
+
+        } else {
+          return "[" + headDesc + " " + commitHash + "]" + m;
+        }
+      }
+    }
 
   },
 }
