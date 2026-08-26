@@ -102,4 +102,27 @@ const gitlet = module.exports = {
     }
 
   },
+
+  branch(name, opts) {
+    files.assertInRepo();
+    opts = opts || {};
+
+    if (name === undefined) {
+      return Objects.keys(refs.localHeads()).map((branch) => {
+        return (branch === refs.headBranchName() ? "* " : "  ") + branch;
+      }).join("\n") + "\n";
+    } else if (refs.hash("HEAD") === undefined) {
+      throw new Error(refs.headBranchName() + "not a valid object name");
+
+    } else if (refs.exists(refs.toLocalRef(name))) {
+      throw new Error("A branch named " + name + " already exists");
+    } else {
+      gitlet.update_ref(refs.toLocalRef(name), refs.hash("HEAD"));
+    }
+  },
+
+  checkout(ref, _) {
+
+  },
+
 }
