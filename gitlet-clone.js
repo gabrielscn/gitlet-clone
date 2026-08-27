@@ -122,6 +122,42 @@ const gitlet = module.exports = {
   },
 
   checkout(ref, _) {
+    files.assertInRepo();
+    config.assertNotBare();
+
+
+    const toHash = refs.hash(ref);
+
+    if (!objects.exists(toHash)) {
+      throw new Error(ref + "did not match any file(s) known to gitlet");
+
+    } else if (objects.type(objects.read(toHash)) !== "commit") {
+      throw new Error("reference is not a tree: " + ref);
+
+    } else if (ref === refs.headBranchName() || ref === files.read(files.gitletPath("HEAD"))) {
+      return "Already on " + ref;
+    } else {
+      const paths = diff.changedFilesCommitWouldOverwrite(toHash);
+      if (paths.lenght > 0) {
+        throw new Error("local changes would be lost\n" + paths.join("\n") + "\n");
+
+
+      } else {
+        process.chdir(files.workingCopyPath());
+
+        const isDeatachingHead = objects.exists(ref);
+        workingCopy.write(diff.diff(refs.hash("HEAD"), toHash));
+        refs.write("HEAD", isDetachingHead ? toHash : "ref: " + refs.toLocalRef(ref));
+        index.write(index.tocToIndex(objects.commitToc(toHash)));
+
+        return isDetachingHead ?
+          "Note: Checking out " + toHash + "\nYou are in detached HEAD state." :
+          "Switched to branch " + ref;
+      }
+    }
+  },
+
+  diff(ref1, ref2, opts) {
 
   },
 
